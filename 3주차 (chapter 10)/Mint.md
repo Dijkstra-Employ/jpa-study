@@ -537,7 +537,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
 > batch size를 너무 크게 지정할 경우 오히려 성능이 나빠질 수 있다.
 
-### ❓ 6. 컬렉션 값 경로 탐색시 별칭 사용 이유:
+### ❓ 6. 컬렉션 값 경로 탐색시 별칭 사용 이유?
 
 - **별칭을 통해 새로운 탐색 시작점을 제공**하여 더 **복잡한 쿼리 구성**이 가능해진다.
 
@@ -548,7 +548,7 @@ FROM Member m
 WHERE o.status = 'COMPLETED'
 ```
 
-### ❓ 7. 사용자 정의 함수 호출 방법:
+### ❓ 7. 사용자 정의 함수 호출 방법?
 
 - 데이터베이스 방언 클래스를 확장하고 사용자 정의 함수를 등록한 후 JPQL에서 사용
 
@@ -620,7 +620,7 @@ SELECT new com.example.MemberDTO(m.name,SIZE(m.orders))FROM Member m
 
 > 패키지 포함 전체 클래스 이름을 명시해야한다.
 
-### ❓ 11. JoinType.LEFT:
+### ❓ 11. JoinType.LEFT란?
 
 Left Outer Join을 의미한다.
 왼쪽 엔티티는 모두 포함하고, 오른쪽 엔티티는 조건에 맞는 것만 포함
@@ -631,7 +631,7 @@ SELECT m FROM Member m LEFT JOIN m.orders o
 
 > 주문이 없는 회원도 포함하여 결과를 반환
 
-### ❓ 12. 네이티브 함수:
+### ❓ 12. 네이티브 함수란?
 
 **특정 데이터베이스에만 존재하는 함수**
 JPA에서 직접 지원하지 않지만, 사용자 정의 함수로 등록하여 사용할 수 있다.
