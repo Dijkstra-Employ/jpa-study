@@ -6,19 +6,23 @@
 - 엔티티 하나에 여러 테이블 매핑
 
 # 7.1 상속 관계 매핑
+<img src="img/img.png" width="500">
+ 
 - 슈퍼 타입 서브 타입 관계 구현하는 방법
 1. **각각의 테이블로 변환** : 각각을 모두 테이블로 만들고 조회할 때 조인 사용 (조인 전략)
 2. **통합 테이블로 변환** : 테이블을 하나만 사용해서 통합 (단일 테이블 전략)
 3. **서브타입 테이블로 변환** : 서브 타입마다 하나의 테이블 (구현 클래스마다 테이블 전략)
 
 ## 조인 전략
-- 엔티티 각각을 모두 테이블로 만들고 자식 테이블이 부모 테이블의 기본키를 받아서 기본키 + 외래키로 사용하는 전략
+<img src="img/img_1.png" width="500">
+
+ - 엔티티 각각을 모두 테이블로 만들고 자식 테이블이 부모 테이블의 기본키를 받아서 기본키 + 외래키로 사용하는 전략
 - 테이블은 타입의 개념이 없으므로 타입을 구분하는 컬럼을 추가해야 한다.
 - 매핑 정보
-    - `@Inheritance(strategy = InheritanceType.JOINED)` : 조인 전략
-    - `@DiscriminatorColumn(name = "DTYPE")` : 구분 컬럼 지정
-    - `@DiscriminatorValue("A")` : 구분 컬럼 값
-    - `@PrimaryKeyJoinColumn` : 자식 테이블의 기본 키 컬럼명 변경
+  - `@Inheritance(strategy = InheritanceType.JOINED)` : 조인 전략
+  - `@DiscriminatorColumn(name = "DTYPE")` : 구분 컬럼 지정
+  - `@DiscriminatorValue("A")` : 구분 컬럼 값
+  - `@PrimaryKeyJoinColumn` : 자식 테이블의 기본 키 컬럼명 변경
 ```java
 @Entity
 @Inheritance(strategy = InheritanceType.JOINED)
@@ -37,45 +41,6 @@ public abstract class Item {
     private List<Category> categories = new ArrayList<Category>();
 
     //Getter, Setter
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public int getPrice() {
-        return price;
-    }
-
-    public void setPrice(int price) {
-        this.price = price;
-    }
-
-    public int getStockQuantity() {
-        return stockQuantity;
-    }
-
-    public void setStockQuantity(int stockQuantity) {
-        this.stockQuantity = stockQuantity;
-    }
-
-    public List<Category> getCategories() {
-        return categories;
-    }
-
-    public void setCategories(List<Category> categories) {
-        this.categories = categories;
-    }
 
     @Override
     public String toString() {
@@ -97,21 +62,7 @@ public class Album extends Item {
     private String artist;
     private String etc;
 
-    public String getArtist() {
-        return artist;
-    }
-
-    public void setArtist(String artist) {
-        this.artist = artist;
-    }
-
-    public String getEtc() {
-        return etc;
-    }
-
-    public void setEtc(String etc) {
-        this.etc = etc;
-    }
+    //Getter, Setter
 
     @Override
     public String toString() {
@@ -131,23 +82,8 @@ public class Book extends Item {
     private String author;
     private String isbn;
 
-
-    public String getAuthor() {
-        return author;
-    }
-
-    public void setAuthor(String author) {
-        this.author = author;
-    }
-
-    public String getIsbn() {
-        return isbn;
-    }
-
-    public void setIsbn(String isbn) {
-        this.isbn = isbn;
-    }
-
+    //Getter, Setter
+    
     @Override
     public String toString() {
         return "Book{}";
@@ -165,12 +101,14 @@ public class Book extends Item {
 - 데이터 등록시 INSERT SQL을 두번 실행한다. (부모 + 자식)
 
 ## 단일 테이블 전략
-- 테이블을 하나만 사용한다.
+<img src="img/img_2.png" width="500">
+
+ - 테이블을 하나만 사용한다.
 - 구분 컬럼으로 어떤 자식 데이터가 저장되었는지 구분한다.
 - 조인을 사용하지 않으므로 일반적으로 가장 빠르다.
 - 매핑 정보
-    - `@Inheritance(strategy = InheritanceType.SINGLE_TABLE)` : 단일 테이블 전략
-    - 구분 컬럼 필수 사용(`@DiscriminatorColumn`, `@DiscriminatorValue("A")`)
+  - `@Inheritance(strategy = InheritanceType.SINGLE_TABLE)` : 단일 테이블 전략
+  - 구분 컬럼 필수 사용(`@DiscriminatorColumn`, `@DiscriminatorValue("A")`)
 >`@DiscriminatorValue는 기본값으로 엔티티 이름 사용
 ```java
 @Entity
@@ -190,45 +128,6 @@ public abstract class Item {
     private List<Category> categories = new ArrayList<Category>();
 
     //Getter, Setter
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public int getPrice() {
-        return price;
-    }
-
-    public void setPrice(int price) {
-        this.price = price;
-    }
-
-    public int getStockQuantity() {
-        return stockQuantity;
-    }
-
-    public void setStockQuantity(int stockQuantity) {
-        this.stockQuantity = stockQuantity;
-    }
-
-    public List<Category> getCategories() {
-        return categories;
-    }
-
-    public void setCategories(List<Category> categories) {
-        this.categories = categories;
-    }
 
     @Override
     public String toString() {
@@ -249,21 +148,7 @@ public class Album extends Item {
     private String artist;
     private String etc;
 
-    public String getArtist() {
-        return artist;
-    }
-
-    public void setArtist(String artist) {
-        this.artist = artist;
-    }
-
-    public String getEtc() {
-        return etc;
-    }
-
-    public void setEtc(String etc) {
-        this.etc = etc;
-    }
+    //Getter, Setter
 
     @Override
     public String toString() {
@@ -281,12 +166,14 @@ public class Album extends Item {
 ### 단점
 - 자식 엔티티가 매핑한 컬럼은 모두 `null을 허용`해야 한다.
 - 단일 테이블에 모든 것을 저장하므로 테이블이 커질 수 있다.
-    - 상황에 따라 오히려 조회 성능이 느려질 수 있다.
+  - 상황에 따라 오히려 조회 성능이 느려질 수 있다.
 
 ## 구현 클래스마다 테이블 전략 (추천 X)
+<img src="img/img_3.png" width="500">
+
 - 자식 엔티티마다 테이블을 만든다.
 - 자식 테이블 각각에 필요한 컬럼이 모두 있다.
-    - 구분 컬럼을 사용하지 않는다.
+  - 구분 컬럼을 사용하지 않는다.
 ```java
 @Entity
 @Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
@@ -304,45 +191,6 @@ public abstract class Item {
     private List<Category> categories = new ArrayList<Category>();
 
     //Getter, Setter
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public int getPrice() {
-        return price;
-    }
-
-    public void setPrice(int price) {
-        this.price = price;
-    }
-
-    public int getStockQuantity() {
-        return stockQuantity;
-    }
-
-    public void setStockQuantity(int stockQuantity) {
-        this.stockQuantity = stockQuantity;
-    }
-
-    public List<Category> getCategories() {
-        return categories;
-    }
-
-    public void setCategories(List<Category> categories) {
-        this.categories = categories;
-    }
 
     @Override
     public String toString() {
@@ -362,21 +210,7 @@ public class Album extends Item {
     private String artist;
     private String etc;
 
-    public String getArtist() {
-        return artist;
-    }
-
-    public void setArtist(String artist) {
-        this.artist = artist;
-    }
-
-    public String getEtc() {
-        return etc;
-    }
-
-    public void setEtc(String etc) {
-        this.etc = etc;
-    }
+    //Getter, Setter
 
     @Override
     public String toString() {
@@ -396,16 +230,18 @@ public class Album extends Item {
 - 자식 테이블을 통합해서 쿼리하기 어렵다.
 
 # 7.2 `@MappedSuperclass`
+<img src="img/img_4.png" width="500">
+
 - 부모 클래스는 테이블과 매핑하지 않고 **부모 클래스를 상속받는 자식 클래스에게 매핑 정보만 제공**
 - 추상 클래스와 비슷하며 실제 테이블과는 매핑되지 않는다.
-    - 단순히 매핑 정보를 상속할 목적으로만 사용된다.
-    - 엔티티가 아니므로 `em.find()`나 `JPQL`에서 사용할 수 없다.
-    - 클래스를 직접 생성해서 사용할 일이 거의 없으므로 `추상 클래스`를 만드는 것을 권장한다.
+  - 단순히 매핑 정보를 상속할 목적으로만 사용된다.
+  - 엔티티가 아니므로 `em.find()`나 `JPQL`에서 사용할 수 없다.
+  - 클래스를 직접 생성해서 사용할 일이 거의 없으므로 `추상 클래스`를 만드는 것을 권장한다.
 
 ### 공통 속성 상속
 - 테이블은 그대로 두고 객체 모델의 `id`, `name` 두 공통 속성을 부모 클래스로 모으고 객체 상속 관계 만들기
 - 부모 클래스
-    - 공통 매핑 정보를 정의한다.
+  - 공통 매핑 정보를 정의한다.
 ```java
 @MappedSuperclass
 public class BaseEntity {
@@ -414,27 +250,12 @@ public class BaseEntity {
     private Date lastModifiedDate;  //수정일
 
     //Getter, Setter
-    public Date getCreatedDate() {
-        return createdDate;
-    }
-
-    public void setCreatedDate(Date createdDate) {
-        this.createdDate = createdDate;
-    }
-
-    public Date getLastModifiedDate() {
-        return lastModifiedDate;
-    }
-
-    public void setLastModifiedDate(Date lastModifiedDate) {
-        this.lastModifiedDate = lastModifiedDate;
-    }
 }
 ```
 - 자식 클래스
-    - 상속을 통해 부모 클래스의 매핑 정보를 물려받는다.
-    - `@AttributeOverride`, `@AttributeOverrides`  : 부모로부터 물려받은 `매핑정보` 재정의
-    - `@AssociationOverride`, `@AssociationOverrides` : `연관관계` 재정의
+  - 상속을 통해 부모 클래스의 매핑 정보를 물려받는다.
+  - `@AttributeOverride`, `@AttributeOverrides`  : 부모로부터 물려받은 `매핑정보` 재정의
+  - `@AssociationOverride`, `@AssociationOverrides` : `연관관계` 재정의
 ```java
 @Entity
 @AttributeOverride(name = "id", column = @Column(name="MEMBER_ID"))
@@ -454,71 +275,30 @@ public class Member extends BaseEntity {
     private List<Order> orders = new ArrayList<Order>();
 
     //Getter, Setter
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getCity() {
-        return city;
-    }
-
-    public void setCity(String city) {
-        this.city = city;
-    }
-
-    public String getStreet() {
-        return street;
-    }
-
-    public void setStreet(String street) {
-        this.street = street;
-    }
-
-    public String getZipcode() {
-        return zipcode;
-    }
-
-    public void setZipcode(String zipcode) {
-        this.zipcode = zipcode;
-    }
-
-    public List<Order> getOrders() {
-        return orders;
-    }
-
-    public void setOrders(List<Order> orders) {
-        this.orders = orders;
-    }
 }
 ```
 
 ## 7.3 복합키와 식별 관계 매핑
 ### 식별 관계 vs 비식별 관계
+<img src="img/img_5.png" width="500">
+
 - 식별 관계: 부모 테이블의 기본키를 내려받아서 **자식 테이블의 기본키+외래키**로 사용하는 관계
-- 비식별 관계: 부모 테이블의 기본키를 받아서 **자식 테이블의 외래키**로만 사용하는 관계
-    - 필수적 비식별 관계: 외래키에 `null을 허용하지 않는다`. **연관관계 필수**
-    - 선택적 비식별 관계: 외래키에 `null을 허용`한다. **연관관게 선택**
+
+<img src="img/img_6.png" width="500">
+
+ - 비식별 관계: 부모 테이블의 기본키를 받아서 **자식 테이블의 외래키**로만 사용하는 관계
+  - 필수적 비식별 관계: 외래키에 `null을 허용하지 않는다`. **연관관계 필수**
+  - 선택적 비식별 관계: 외래키에 `null을 허용`한다. **연관관게 선택**
 > 비식별 관계를 주로 사용하며,  **꼭 필요한 곳에만 식별 관계 사용하기**
 
 ### 복합키: 비식별관계 매핑
+<img src="img/img_7.png" width="500">
+
 - JPA에서 식별자를 둘 이상 사용하려면 **별도의 `식별자 클래스`를 만들어야 한다.**
-    - 영속성 컨텍스트에 엔티티를 보관할때 `엔티티의 식별자`를 키로 사용한다.
-    - `equals`와 `hashCode`를 사용해서 동등성을 비교하므로 해당 식별자 클래스에 꼭 구현해야한다.
-        - 기본은 동일성 비교(`\==`)이기 때문이다.
-        - 모든 필드를 사용하여 식별자 클래스의 `equals` 와 `hashCode` 를 구현한다.
+  - 영속성 컨텍스트에 엔티티를 보관할때 `엔티티의 식별자`를 키로 사용한다.
+  - `equals`와 `hashCode`를 사용해서 동등성을 비교하므로 해당 식별자 클래스에 꼭 구현해야한다.
+    - 기본은 동일성 비교(`\==`)이기 때문이다.
+    - 모든 필드를 사용하여 식별자 클래스의 `equals` 와 `hashCode` 를 구현한다.
 > 복합키에는 @GeneratedValue를 사용할 수 없다.
 > 복합키를 구성하는 여러 컬럼 중 하나에도 사용할 수 없다.
 
@@ -611,7 +391,7 @@ public class Child{
 ### 2. @EmbeddedId
 - 객체지향에 가까운 방법
 - Parent
-    - 식별자 클래스에 기본키를 직접 매핑한다.
+  - 식별자 클래스에 기본키를 직접 매핑한다.
 ```java
 @Entity
 public class Parent {
@@ -665,6 +445,8 @@ em.createQuery("select p.id1, p.id2 from Parent p"); //@IdClass
 ```
 
 ### 복합키: 식별관계 매핑
+<img src="img/img_8.png" width="500">
+
 - 부모, 자식, 손자까지 기본키를 전달하는 식별 관계이다.
 
 #### @IdClass와 식별 관계
@@ -743,8 +525,8 @@ public class GrandChildId implements Serializable {
 
 ### @EmbeddedId와 식별 관계
 - 식별관계 구성시 `@MapsId`를 사용해야 한다.
-    - `@MapsId` : 외래키와 매핑한 연관관계를 기본키에도 매핑한다.
-        - 식별자 클래스의 기본 키 필드를 지정하면 된다.
+  - `@MapsId` : 외래키와 매핑한 연관관계를 기본키에도 매핑한다.
+    - 식별자 클래스의 기본 키 필드를 지정하면 된다.
 - Parent
 ```java
 @Entity
@@ -826,6 +608,8 @@ public class GrandChildId implements Serializable {
 ```
 
 ### 비식별 관계로 변경하기
+<img src="img/img_9.png" width="500">
+
 ```java
 @Entity
 public class Parent {
@@ -868,8 +652,10 @@ public class GrandChild {
 > 매핑도 쉽고 코드도 단순하다.
 
 ### 일대일 식별관계
+<img src="img/img_10.png" width="500">
+
 - 자식 테이블의 기본키 값으로 부모 테이블의 기본키 값만 사용한다.
-    - 부모 테이블의 기본키가 복합키가 아니면 자식 테이블의 기본키는 복합키로 구성하지 않아도 된다.
+  - 부모 테이블의 기본키가 복합키가 아니면 자식 테이블의 기본키는 복합키로 구성하지 않아도 된다.
 ```java
 @Entity
 public class Board {
@@ -900,11 +686,11 @@ public class BoardDetail {
 ### 식별, 비식별 관계의 장단점
 #### 데이터베이스 설계 관점에서 **식별 관계보다는 비식별 관계를 선호**한다.
 - 식별 관계: 부모 테이블의 기본키를 자식 테이블로 전파하면서 **자식 테이블의 기본 키 컬럼이 점점 늘어난다.**
-    - 조인할 때 SQL이 복잡해지고 기본키 인덱스가 불필요하게 커질 수 있다.
-    - 테이블 구조가 유연하지 못하다.
+  - 조인할 때 SQL이 복잡해지고 기본키 인덱스가 불필요하게 커질 수 있다.
+  - 테이블 구조가 유연하지 못하다.
 - 식별 관계는 `2개 이상의 컬럼`을 합해서 복합 기본키를 만들어야하는 경우가 많다.
 - 식별 관계를 사용할 때 비즈니스 의미가 있는 `자연키 컬럼을 기본키`를 조합하는 경우가 많다.
-    - 비즈니스 요구사항은 시간이 지남에 따라 변하므로 식별 관계의 자연 키 컬럼들이 자식에 손자까지 전파되면 변경하기 힘들다.
+  - 비즈니스 요구사항은 시간이 지남에 따라 변하므로 식별 관계의 자연 키 컬럼들이 자식에 손자까지 전파되면 변경하기 힘들다.
 - 비식별 관계의 기본키는 비즈니스와 전혀 관계없는 `대리키`를 주로 사용한다.
 
 #### 객체 매핑 관점에서 **식별 관계보다는 비식별 관계를 선호**한다.
@@ -913,11 +699,211 @@ public class BoardDetail {
 
 #### 식별 관계의 장점
 - 기본키 인덱스를 활용하기 좋다.
-- 조인 없이 하위 테이블만으로 검색을 완료할 수 있따.
+- 조인 없이 하위 테이블만으로 검색을 완료할 수 있다.
 #### 추천 방법
 - 가능하면 **비식별 관계를 사용**하고 기본키를 **Long 타입의 대리키**를 사용하자.
-    - 대리키는 비즈니스가 변경되어도 유연한 대처가 가능하다.
-    - 식별자 컬럼이 하나여서 쉽게 매핑할 수 있다.
+  - 대리키는 비즈니스가 변경되어도 유연한 대처가 가능하다.
+  - 식별자 컬럼이 하나여서 쉽게 매핑할 수 있다.
 - 선택적 비식별 관계보다 **필수적 비식별 관계를 사용**하는 것이 좋다.
-    - `선택적인 비식별 관계`는 NULL을 허용하므로 `외부 조인을 사용`한다.
-    - `필수적 비식별 관계`는 NOT NULL로 항상 관계가 있음을 보장하므로 **내부 조인만 사용해도 된다.**
+  - `선택적인 비식별 관계`는 NULL을 허용하므로 `외부 조인을 사용`한다.
+  - `필수적 비식별 관계`는 NOT NULL로 항상 관계가 있음을 보장하므로 **내부 조인만 사용해도 된다.**
+
+## 7.4 조인 테이블
+- **조인 컬럼** 사용(외래키)
+- **조인 테이블** 사용(테이블 사용)
+
+### 조인 컬럼 사용 `@JoinColumn`
+<img src="img/img_11.png" width="500">
+
+- 테이블 관계를 `조인 컬럼`이라고 부르는 **외래 키 컬럼을 사용**해서 관리한다.
+  - 선택적 비식별 관계: 외래키에 null 허용
+    - 외부 조인 사용
+    - 아주 가끔 관계를 맺는다면 외래키값 대부분이 null로 저장
+
+### 조인 테이블 사용 `@JoinTable`
+<img src="img/img_12.png" width="500">
+
+- `조인 테이블`이라는 별도의 테이블을 사용해서 연관관계 관리
+  - 테이블을 하나 추가하므로 관리해야할 필요가 있고, 두 테이블을 조인하려면 연결 테이블까지 추가로 조인해야한다.
+  - 기본은 조인 컬럼을 사용하고, 필요하면 조인 테이블을 사용하자.
+- 주로 다대다 관계를 일대다, 다대일 관계로 풀어내기 위해 사용한다.
+
+### 일대일 조인 테이블
+<img src="img/img_13.png" width="500">
+
+```java
+@Entity
+public class Parent {
+
+	@Id @GeneratedValue
+	@Column(name = "PARENT_ID")
+	private Long id;
+	private String name;
+
+	@OneToOne
+	@JoinTable(name="PARENT_CHILD",
+			joinColumns = @JoinColumn(name = "PARENT_ID"),
+			inverseJoinColumns = @JoinColumn(name = "CHILD_ID")
+	)
+	private Child child;
+	
+}
+```
+- `name` : 매핑할 조인 테이블 이름
+- `joinColumns` : 현재 엔티티를 참조하는 외래키
+- `inverseJoinColumns` : 반대방향 엔티티를 참조하는 외래키
+
+```java
+@Entity
+public class Child {
+
+	@Id @GeneratedValue
+	@Column(name = "CHILD_ID")
+	private Long id;
+	private String name;
+}
+```
+
+> 양방향으로 매핑하려면 mappedBy를 추가하면 된다.
+```java
+ @OneToOne(mappedBy = "child")
+ private Parent parent;
+```
+
+### 일대다 조인 테이블
+- 일대다 단방향으로 매핑하기
+
+<img src="img/img_14.png" width="500">
+
+```java
+@Entity
+public class Parent {
+
+	@Id @GeneratedValue
+	@Column(name = "PARENT_ID")
+	private Long id;
+	private String name;
+
+	@OneToMany
+	@JoinTable(name="PARENT_CHILD",
+			joinColumns = @JoinColumn(name = "PARENT_ID"),
+			inverseJoinColumns = @JoinColumn(name = "CHILD_ID")
+	)
+	private List<Child> child = new ArrayList<Child>();
+	
+}
+```
+
+```java
+@Entity
+public class Child {
+
+	@Id @GeneratedValue
+	@Column(name = "CHILD_ID")
+	private Long id;
+	private String name;
+}
+```
+
+### 다대일 조인 테이블
+- 다대일 양방향으로 매핑하기
+```java
+@Entity
+public class Parent {
+
+	@Id @GeneratedValue
+	@Column(name = "PARENT_ID")
+	private Long id;
+	private String name;
+
+	@OneToMany(mappedBy="parent")
+	private List<Child> child = new ArrayList<Child>();
+	
+}
+```
+
+```java
+@Entity
+public class Child {
+
+	@Id @GeneratedValue
+	@Column(name = "CHILD_ID")
+	private Long id;
+	private String name;
+	
+	@ManyToOne(optional=false)
+	@JoinTable(name="PARENT_CHILD",
+			joinColumns = @JoinColumn(name = "CHILD_ID"),
+			inverseJoinColumns = @JoinColumn(name = "PARENT_ID")
+	)
+	private Parent parent;
+}
+```
+
+### 다대다 조인 테이블
+<img src="img/img_15.png" width="500">
+
+- 조인 테이블의 두 컬럼을 합해서 하나의 복합 유니크 제약조건 걸기
+ ```java
+@Entity
+public class Parent {
+
+	@Id @GeneratedValue
+	@Column(name = "PARENT_ID")
+	private Long id;
+	private String name;
+
+	@ManyToOne
+	@JoinTable(name="PARENT_CHILD",
+			joinColumns = @JoinColumn(name = "PARENT_ID"),
+			inverseJoinColumns = @JoinColumn(name = "CHILD_ID")
+	)
+	private List<Child> child = new ArrayList<Child>();
+	
+}
+```
+
+```java
+@Entity
+public class Child {
+
+	@Id @GeneratedValue
+	@Column(name = "CHILD_ID")
+	private Long id;
+	private String name;
+	
+}
+```
+> 조인 테이블에 컬럼을 추가하면 @JoinTable 전략을 사용할 수 없다.
+> 대신에 새로운 엔티티를 만들어서 조인 테이블과 매핑해야 한다.
+
+
+## 7.5 엔티티 하나에 여러 테이블 매핑
+<img src="img/img_16.png" width="500">
+
+- `@SecondaryTable` : 한 엔티티에 여러 테이블을 매핑
+
+```java
+@Entity
+@Table(name = "BOARD")
+@SecondaryTable(name = "BOARD_DETAIL",
+			   pkJoinColumns = @PrimaryKeyJoinColumn(name = "BOARD_RETAIL_ID"))
+public class Board {
+
+	@Id @GeneratedValue
+	@Column(name = "BOARD_ID")
+	private Long id;
+
+	private String title;
+
+	@Column(table = "BOARD_DETAIL")
+	private String content;
+}
+```
+- `SecondaryTable.name` : 매핑할 다른 테이블의 이름
+- `SecondaryTable.PrimaryKeyJoinColumn` : 매핑할 다른 테이블의 기본 키 컬럼 속성
+
+#### 가능하면 테이블당 엔티티를 각각 만들어서 일대일 매핑을 하자.
+`@SecondaryTable`은 항상 두 테이블을 조회하므로 최적화하기 어렵다.
+일대일 매핑은 원하는 부분만 조회할 수 있고, 필요하면 둘을 함께 조회하면 된다.
+
