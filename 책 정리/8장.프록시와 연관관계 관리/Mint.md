@@ -231,7 +231,7 @@ em.remove(findParent);
 ```java
 @Entity
 public class Comment {
-	@ManyToOne(cascade = CascadeType.REMOVE)
+    @ManyToOne(cascade = CascadeType.REMOVE)
     @JoinColumn(name = "post_id")
     private Post post;
 }
