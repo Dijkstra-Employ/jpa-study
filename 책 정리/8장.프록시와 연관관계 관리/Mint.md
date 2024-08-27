@@ -63,11 +63,13 @@ member.getName(); // 실제 객체의 메서드 호출
     - 엔티티 접근 방식이 `프로퍼티 접근 방식`(getter)일 경우만 해당한다.
 > 필드 접근 방식일 경우 getId()안에 별도의 로직이 있을 수 있으므로 프록시 객체를 초기화한다.
 
+> **-> Hibernate의 경우 `getId()`와 같은 `getIdentifier()`는 db를 초기화하지 않는다.**
+
 - 연관관계를 설정할때는 식별자만 사용하므로 db 조회없이 프록시를 이용하면 된다.
     - 연관관계 설정시에는 필드 접근 방식이어도 프록시를 초기화하지 않는다.
 
 ### 프록시 확인
-- PersistenceUnitUtil.isLoaded(Object entity) : 프록시 인스턴스의 초기화 여부 확인
+- `PersistenceUnitUtil.isLoaded(Object entity)` : 프록시 인스턴스의 초기화 여부 확인
     - 이미 초기화되었거나 프록시 인스턴스가 아니면 true
 > hibernate의 initialize()를 통해 프록시를 강제로 초기화할 수 있다.
 
@@ -224,6 +226,39 @@ em.remove(findParent);
 Parent findParent = em.find(Parent.class, 1L);
 em.remove(findParent);
 ```
+
+### CASCADE 주의할 점
+```java
+@Entity
+public class Comment {
+	@ManyToOne(cascade = CascadeType.REMOVE)
+    @JoinColumn(name = "post_id")
+    private Post post;
+}
+```
+#### 자식 삭제시 부모도 함께 삭제
+- `comment` 삭제시 `post`도 함께 삭제된다.
+  - `comment1`과 `comment2`가 `post`와 연관되어있을때, `comment1`만 지우면 `post1`까지 함께 지워진다.
+  - `comment2`는 삭제된 `post1`을 참조하기 때문에 **참조 무결성 제약조건을 위배한다.**
+
+#### 양방향 매핑관계 매핑시 충돌
+```java
+@Entity
+public class Post {
+    @OneToMany(mappedBy = "post", cascade = CascadeType.PERSIST)
+    private List<Comment> comments = new ArrayList<>();
+}
+```
+- `Post` 저장시 `Comment`까지 함께 저장된다.
+  - `comment1`과 `comment2`가 post와 연관되어있는데, `comment1`을 삭제했지만 `post`에 반영되지 않은 상태이다.
+  - `post` 저장시 연관된 `comment1`과  `comment2`가 함께 저장되어 이미 삭제된 `comment1`이 저장된다.
+- **문제 : comment를 Post와 Comment 양쪽에서 `상태를` 관리하고 있다.**
+  - `Cascade` 옵션으로 인해 Post가 Comment의 생명주기에 영향을 미친다.
+- 해결 : **연관관계 편의 메서드 구현**
+  - `comment1` 삭제시 post와 연관된 `comment1`도 삭제한다.
+> 영속성 전이(cascade)는 부모가 단 하나일때 사용해야한다.
+> **단방향 연관관계**에서 사용하자.
+
 
 ### CASCADE 종류
 ```java
