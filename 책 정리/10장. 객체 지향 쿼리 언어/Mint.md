@@ -112,7 +112,7 @@ List<Member> resultList =
 ```
 > createNativeQuery() 를 사용한다.
 
-## JDBC 직접 사용, MyBatis 같은 SQL Mapper 프레임워큿 ㅏ용
+## JDBC 직접 사용, MyBatis 같은 SQL Mapper 프레임워크 사용
 - JDBC 커넥션에 직접 접근하고 싶으면 JPA 구현체가 제공하는 방법을 사용해야한다.
 - hibernate 예시
 ```java
