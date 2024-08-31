@@ -444,3 +444,279 @@ where t.name = '팀A';
 > 일대다 조인은 결과가 증가할 수 있다.
 > 다대일 조인은 결과가 증가하지 않는다.
 
+
+#### distinct로 중복 결과 제거
+```sql
+select distinct t 
+from Team t join fetch t.members
+where t.name = '팀A';
+```
+> db 테이블 컬럼은 team과 연관된 member가 다르므로 연관된 멤버만큼의 컬럼이 조회된다.
+> distinct t는 애플리케이션에서 중복 결과를 제거한다.
+
+### fetch join vs 일반 join
+```sql
+select t 
+from Team t join t.members m
+where t.name = '팀A';
+```
+- `일반 join` : select 절에 지정한 엔티티만 조회한다.
+  - 연관된 엔티티(member)는 조회하지 않는다.
+- `fetch join` : 연관된 엔티티까지 조회한다.
+
+### fetch join의 특징
+- 연관된 엔티티를 함께 조회할 수 있어서 `SQL 호출 횟수`를 줄여 **성능이 향상된다.**
+- `글로벌 로딩 전략`보다 `fetch join`이 우선한다.
+  - **글로벌 로딩 전략은 `지연 로딩`을 사용하고 최적화가 필요하면 `fetch join`을 사용하자.**
+- 연관된 엔티티를 `쿼리 시점`에 조회하므로 `지연 로딩`이 발생하지 않는다.
+  - `준영속 상태`에서도 이미 메모리에 로드되어있으므로 `객체 그래프`를 탐색할 수 있다
+
+### fetch join의 한계
+```java
+SELECT o FROM Order o JOIN FETCH o.items i WHERE i.price > 1000 // 잘못됨
+```
+- **`fetch join` 대상에는 `별칭`을 줄 수 없다.**
+  - hibernate와 같은 구현체는 별칭을 사용할 수 있으나, 잘못 사용하여 연관된 데이터 수가 달라져 데이터 무결성이 깨질 수 있다. (특히 2차 캐시에서 주의해야한다.)
+  - **일부만 로딩**되어 객체의 상태가 불완전한 상태에서 공유하면 문제가 생긴다.
+```java
+SELECT o FROM Order o JOIN FETCH o.items JOIN FETCH o.payments // 잘못됨
+```
+- **둘 이상의 컬렉션**을 `fetch` 할 수 없다.
+  - 카테시안 곱이 만들어지며 예외가 발생한다.
+  - 데이터 양이 많아져 중복 데이터 처리나 정합성 문제가 생긴다.
+```java
+String jpql = "SELECT o FROM Order o JOIN FETCH o.items";
+List<Order> orders = em.createQuery(jpql, Order.class)
+                       .setFirstResult(0)  // 시작 위치 
+                       .setMaxResults(10)  // 가져올 개수
+                       .getResultList(); // 잘못됨
+```
+- **컬렉션을 `fetch join`하면 `페이징 api`를 사용할 수 없다.**
+  - 연관된 모든 엔티티를 조회하여 가져온다.
+    - order가 20개이고, 연관된 item이 각 5개이면 100개의 행을 조회하여 가져온다.
+    - `중복된` 주문을 제거하여 20개의 order 객체를 생성한다.
+    - `페이징`이 적용되어 처음 10개의 주문이 반환된다.
+  - **페이징은 마지막에 적용되므로 데이터베이스에서 모든 데이터를 가져오게 되어 페이징 최적화가 되지 않는다.**
+  - 데이터가 많을 경우 `OutOfMemoryError`가 발생한다.
+> 컬렉션(일대다)가 아닌 단일 값 연관필드(일대일, 일대다)는 fetch join하여 페이징 api를 사용할 수 있다.
+```java
+SELECT new com.example.OrderDTO(o.id, o.orderDate, c.name) 
+FROM Order o JOIN o.customer c
+```
+- **`fetch join`은 객체 그래프를 유지할 때 사용하면 효과적이지만, 여러 테이블을 조인하여 `엔티티가 아닌 다른 모양`으로 결과를 내야 한다면 join하여 `dto`로 반환하는 것이 더 효과적이다.**
+  - 일부 데이터만 가져오는 것이 메모리 사용을 줄일 수 있다.
+
+## 경로 표현식
+- JPQL에서 사용하며 . 을 찍어 객체 그래프를 탐색한다.
+- 묵시적 조인이 발생한다.
+
+### 용어 정리
+- 상태 필드 : 단순히 값을 저장하기 위한 필드
+  - ex) m.age
+- 연관 필드 : 연관관계 필드, 임베디드 타입 포함
+  - 단일값 연관 필드 : `@ManyToOne`, `@OneToOne`, 대상이 엔티티
+    -  ex) m.team
+  - 컬렉션 값 연관 필드 : `@OneToMany`, `@ManyToMany` 대상이 컬렉션
+    -  ex) m.orders
+
+### 경로 표현식과 특징
+- `상태 필드 경로` : 경로 탐색의 끝, **더는 탐색할 수 없다**.
+- `단일 값 연관 경로` : 묵시적으로 `내부 조인`이 일어난다. **계속 탐색할 수 있다.**
+- `컬렉션 값 연관 경로` : 묵시적으로 `내부 조인`이 일어난다. **더는 탐색할 수 없다.**
+  - **`명시적 조인(join)`으로 `별칭`을 얻으면 별칭으로 탐색할 수 있다.**
+```sql
+select m.username from Team t join t.members m
+```
+
+#### 명시적 조인 vs 묵시적 조인
+- `명시적 조인` : `JOIN`을 직접 적어주는 것
+```sql
+SELECT m FROM Member m JOIN m.team t
+```
+- `묵시적 조인` : `경로 표현식`에 의해 묵시적으로 조인이 일어나는 것, `내부 조인`만 할 수 있다.
+```sql
+SELECT m.team FROM Member m
+```
+> 임베디드 타입 조인시 이미 조인 대상에 임베디드 타입을 포함하는 엔티티의 테이블이 존재한다면 조인이 발생하지 않는다.
+
+> `묵시적 조인`은 한눈에 파악하기 어려우므로 **성능이 중요할 경우 `명시적 조인`을 사용하자.**
+
+## 서브 쿼리
+- WHERE, HAVING 절에서만 사용할 수 있다.
+
+### 서브 쿼리 함수
+- EXISTS
+  - 결과 존재하면 참
+- ALL | ANY | SOME
+  - ALL : 조건을 모두 만족하면 참
+  - ANY 혹은 SOME : 조건을 하나라도 만족하면 참
+- IN
+  - 서브쿼리의 결과 중 하나라도 같은 것이 있으면 참
+
+## 조건식
+### 타입 표현
+- 문자 : `''`
+- 숫자 : `L`,`D`,`F`
+- 날짜 : `DATE`, `TIME`, `DATETIME`
+- Boolean : `TRUE`, `FALSE`
+- Enum
+- 엔티티 타입
+
+### 연산자 우선 순위
+- 1. 경로 탐색 연산
+- 2. 수학 연산
+- 3. 비교 연산
+- 4. 논리 연산
+
+### 논리 연산과 비교식
+- 논리 연산
+  - AND, OR, NOT
+- 비교식
+  - = | < | > | <= | >= | <>
+
+### Between, IN, LIKE, NULL
+- `Between` A AND B
+  - A~B 값 사이
+- `IN` : X와 같은 값이 하나라도 있으면 참
+- `Like` : 문자 표현식과 패턴 값 비교
+  - `%` : 아무 값들이 입력되어도 된다.
+  - `_` : 아무 값들이 입력되어도 되지만 값은 있어야한다.
+- `IS NULL` : NULL인지 비교한다.
+
+### 컬렉션 식
+- `IS EMPTY` : 컬렉션에 값이 비었으면 참
+- `MEMBER` : 엔티티나 값에 컬렉션이 포함되어 있으면 참
+
+### 스칼라 식
+- 수학식
+- 문자함수
+  - `CONCAT`, `SUBSTRING`, `LOWER`, ...
+- 수학함수
+  - `ABS`, `SQRT`, `MOD`
+- 날짜함수
+  - `CURRENT_DATE`
+  - `CURRENT_TIME`
+  - `CURRENT_TIMESTAMP`
+
+### CASE 식
+- `기본 CASE`
+  - 조건식 사용 가능
+- `심플 CASE`
+  - 조건식 사용 불가, 문법 단순
+- `COALESCE`
+  - 스칼라식(첫번째 인자)을 조회하여 null이 아니면 두번째 인자 반환
+- `NULLIF`
+  - 두 값이 같으면 null 반환, 다르면 첫번째값 반환
+
+## 다형성 쿼리
+- 부모 엔티티를 조회하면 그 자식 엔티티도 함께 조회한다.
+
+### TYPE
+- 엔티티 상속 구조에서 조회 대상을 특정 자식 타입으로 한정할 때 사용한다.
+```sql
+select i from Item i
+where type(i) IN (Book, Movie)
+```
+> Item에서 해당 Dtype만 조회한다.
+
+### TREAT
+- 부모 타입을 특정 자식 타입으로 다룰 때 사용한다.
+```sql
+select i from Item i where treat(i as Book).author = 'kim'
+```
+
+### 사용자 정의 함수 호출
+- 방언 클래스를 상속해서 구현하고 사용할 데이터베이스 함수를 미리 등록한다.
+
+### 기타 정리
+- enum은 = 비교 연산만 지원한다.
+- 임베디드 타입은 비교를 지원하지 않느다.
+
+#### Empty String
+- JPA는 '' 길이 0인 Empty String으로 정했지만 db마다 null로 사용하는 곳도 있다.
+
+#### null 정의
+- 조건을 만족하는 데이터가 하나도 없으면 null이다.
+- null == null 은 알 수 없는 값이다.
+- AND
+  - True < Null < False
+- OR
+  - False < Null < True
+
+## 엔티티 직접 사용
+### 기본키 값
+- `객체 인스턴스`는 `참조 값`으로 식별하고, 테이블 `row`는 `기본키` 값으로 식별한다.
+  - `jpql`에서 `엔티티` 객체를 직접 사용하면, `sql`에서는 `해당 엔티티의 기본 키` 값을 사용한다.
+- 식별자를 직접 사용해도 결과는 같다.
+```java
+// 두 쿼리는 같은 sql을 실행한다.
+select m from Member m where m = :member;
+select m from Member m where m.id = :memberId;
+```
+
+### 외래키 값
+```java
+// 두 쿼리는 같은 sql을 실행한다.
+select m from Member m where m.team = :team
+select m from Member m.team.id = :teamId
+```
+- 생성되는 sql은 같다.
+
+## NamedQuery : 정적 쿼리
+### JPQL 쿼리
+- `동적 쿼리` : JPQL을 `문자`로 완성해서 직접 넘긴다. `런타임`에 특정 조건에 따라 **jpql을 동적으로 구성**할 수 있다.
+- `정적 쿼리` : 미리 정의한 쿼리에 `이름`을 부여해서 필요할 때 사용할 수 있다. `NamedQuery`라 한다.
+  - 한번 정의하면 변경할 수 없는 정적인 쿼리이다.
+  - 파싱된 결과를 재사용하므로 성능상 이점이 있다.
+
+### NamedQuery 어노테이션에 정의
+```java
+@Entity
+@NamedQuery (
+	name = "Member.findByUsername",
+	query = "select m from Member m where m.username = :username")
+public class Member {
+}
+```
+
+- 직접 사용하기
+```java
+List<Member> resultList = em.createNamedQuery("Member.findByUsername",
+	Member.class)
+	.setParameter("username", "회원1")
+	.getResultList();
+```
+
+> XML은 멀티 라인을 지원하므로 NamedQuery는 XML에 정의하는 것이 더 편리하다.
+> XML과 어노테이션에 같은 설정이 있으면 XML이 우선권을 가진다.
+
+
+# 10.3 Criteria
+
+### Criteria
+- JPQL을 자바 코드로 작성하도록 도와주는 빌더 클래스 api
+- 문자가 아닌 코드로 jpql을 작성하므로 문법 오류를 `컴파일 단계`에서 잡을 수 있고, `동적 쿼리`를 안전하게 생성할 수 있다.
+- 코드가 복잡하고 장황해서 이해하기 힘들다.
+
+## Criteria 기초
+```java
+CriteriaBuilder cb = em.getCriteriaBuilder();
+
+CriteriaQuery<Member> cq = cb.createQuery(Member.class);
+
+Root<Member> m = cq.from(Member.class);
+cq.select(m);
+
+TypedQuery<Member> query = em.createQuery(cq);
+List<Member> members = query.getResultList();
+```
+- 1. 먼저 `Criteria 빌더`를 얻어야한다.
+- 2. `Criteria 쿼리`를 생성한다.
+- 3. `FROM` 절을 생성한다.
+- 4. `SELECT` 절을 생성한다.
+
+#### 쿼리 루트
+- 조회의 시작점이다.
+- JPQL의 별칭이라 생각하면 된다.
+- 엔티티에만 부여할 수 있다.
+
