@@ -720,3 +720,378 @@ List<Member> members = query.getResultList();
 - JPQL의 별칭이라 생각하면 된다.
 - 엔티티에만 부여할 수 있다.
 
+
+## Criteria 쿼리 생성
+```java
+public interface CriteriaBuilder {
+	CriteriaQuery<Object> createQuery();
+	<T> CriteriaQuery<T> createQuery(Class<T> resultClass);
+	CriteriaQuery<Tuple> createTupleQuery();
+}
+```
+- 반환 타입으로 지정하면 createQuery에서 반환 타입을 지정하지 않아도 된다.
+
+```java
+CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery<Member> cq = cb.createQuery(Member.class);
+
+List<Member> resultList = em.createQuery(cq).getResultList();
+```
+- 반환 타입을 지정할 수 없거나 반환 타입이 둘 이상이면 `Object` 또는 `Object[]`를 지정하면 된다.
+```java
+// Object
+CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery<Object> cq = cb.createQuery();
+List<Object> resultList = em.createQuery(cq).getResultList();
+
+// Object[]
+CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
+List<Object[]> resultList = em.createQuery(cq).getResultList();
+```
+- 튜플을 이용해서 반환 타입을 받아도 된다.
+```java
+CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+```
+
+### 조회
+- `select()` : 한건 지정
+- `multiselect()` : 여러건 지정
+- `cb.array()` : 여러 건 지정
+
+### distinct : 중복 제거
+- `distinct(true)`
+```java
+CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
+Root<Member> m = cq.from(Member.class);
+cq.multiselect(m.get("username", m.get("age")).distinct(true);
+
+List<Object[]> resultList = em.createQuery(cq).getResultList();
+```
+
+### new, construct()
+```java
+CriteriaQuery<MemberDTO> cq = cb.createQuery(MemberDTO.class);
+Root<Member> m = cq.from(Member.class);
+cq.select(cb.construct(MemberDTO.class, m.get("username"), m.get("age")));
+
+List<MemberDTO> resultList = em.createQuery(cq).getResultList();
+```
+
+### 튜플
+- 별칭을 꼭 사용해야한다. - alias()
+  - 선언해둔 튜플 별칭으로 데이터를 조회할 수 있다.
+- `이름 기반`이므로 `Object[]`보다 안전하다.
+- `getElements()`로 현재 튜플의 별칭과 자바 타입도 조회할 수 있다.
+- 엔티티도 조회할 수 있다.
+```java
+CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+Root<Member> m = cq.from(Member.class);
+cq.multiselect(
+	m.get("username").alias("username"),
+	m.get("age").alias("age")
+);
+
+List<Tuple> resultList = em.createQuery(cq).getResultList();
+for (Tuple tuple:resultList){
+	String username = tuple.get("username", String.class);
+	Integer age = tuple.get("age", Integer.class);
+}
+```
+
+## 집합
+- GROUP BY : 그룹화
+- HAVING : 그룹화 결과 필터링
+```java
+cq.multiselect(m.get("team").get("name"), maxAge, minAge)
+	.groupBy(m.get("team").get("name"))
+	.having(cb.gt(minAge, 10));
+```
+
+## 정렬
+- cb.desc() 또는 cb.asc()로 생성할 수 있다.
+```java
+cq.select(m)
+	.where(ageGt)
+	.orderBy(cb.desc(m.get("age")));
+```
+
+## 조인
+- join()과 JoinType 클래스를 사용한다.
+```java
+public enum JoinType {
+	INNER,
+	LEFT,
+	RIGHT
+}
+```
+
+```java
+Root<Member> m = cq.from(Member.class);
+Join<Member, Team> t = m.join("team", JoinType.INNER); // 내부 조인
+cq.multiselect(m,t)
+	.where(cb.equal(t.get("name"), "팀A"));
+);
+```
+
+### fetch join
+```java
+Root<Member> m = cq.from(Member.class);
+m.fetch("team", JoinType.LEFT);
+
+cq.select(m);
+```
+
+## 서브 쿼리
+### 간단 서브 쿼리
+```java
+CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery<Member> mainQuery = cb.createQuery(Member.class);
+
+// 서브 쿼리 생성
+SubQuery<Double> subQuery = mainQuery.subquery(Double.class);
+Root<Member> m2 = subQuery.from(Member.class);
+subQuery.select(cb.avg(`m2.<Integer>get("age")`));
+
+// 메인 쿼리 생성
+Root<Member> m = mainQuery.from(Member.class);
+mainQuery.select(m)
+	.where(cb.ge(m.<Integer>get("age"), subQuery));
+```
+
+### 상호 관련 서브 쿼리
+- 메인 쿼리와 서브 쿼리간에 서로 관련이 있을 때
+- 서브 쿼리에서 메인 쿼리의 정보를 사용하려면 메인 쿼리에서 사용한 `별칭`을 얻어야한다.
+  - 메인 쿼리의 `Root`나 `Join`을 통해 생성된 별칭을 받는다.
+```java
+CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery<Member> mainQuery = cb.createQuery(Member.class);
+Root<Member> m = mainQuery.from(Member.class);
+
+// 서브 쿼리 생성
+SubQuery<Team> subQuery = mainQuery.subquery(Team.class);
+Root<Member> subM = suqQuery.correlate(m); // 메인 쿼리의 별칭 가져옴
+Join<Member, Team> t = subM.join("team");
+subQuery.select(t)
+	.where(cb.equal(t.get("name"), "팀A"));
+
+// 메인 쿼리 생성
+mainQuery.select(m)
+	.where(cb.exists(subQuery));
+List<Member> resultList = em.createQuery(mainQuery).getResultList();
+```
+
+## IN 식
+```java
+CriteriaBuilder cb = em.getCriteriaBuilder();
+CriteriaQuery<Member> mainQuery = cb.createQuery(Member.class);
+Root<Member> m = mainQuery.from(Member.class);
+
+cq.select(m)
+	.where(cb.in(m.get("username"))
+	.value("회원1")
+	.value("회원2"));
+```
+
+## CASE 식
+- `selectCase()`, `when()`, `otherwise()` 사용한다.
+```java
+Root<Member> m = cq.from(Member.class);
+cq.multiselect(
+	m.get("username"),
+	cb.selectCase()
+		.when(cb.ge(m.<Integer>get("age"), 60), 600)
+		.when(cb.le(m.<Integer>get("age"), 15), 500)
+		.otherwise(1000)
+);
+```
+
+## 파라미터 정의
+- cb.parameter(타입, 파라미터 이름) : 파라미터 정의
+- setParameter("usernameParam", "회원1") : 파라미터에 사용할 값 바인딩
+
+## 네이티브 함수 호출
+- `cb.function(...)` 메서드 사용
+
+## 동적 쿼리
+- 다양한 검색 조건에 따라 실행 시점에 쿼리 생성하는 것
+- 코드 기반인 Criteria로 작성하는 것이 편리하다.
+- 공백이나 where, and 위치로 인해 에러는 발생하지 않지만, 코드가 장황하고 복잡하여 읽기 힘들다.
+
+## 함수 정리
+- Criteria는 jpql 함수를 코드로 지원한다.
+- 조건 함수
+- 스칼라와 기타 함수
+- 집합 함수
+- 분기 함수
+
+## Criteria 메타 모델 API
+- 필드까지 코드로 작성하려면 메타 모델 API를 이용하면 된다.
+  - 메타 모델 클래스 : 엔티티명_
+- 코드 자동 생성기가 엔티티 클래스를 기반으로 메타 모델 클래스들을 만들어준다.
+
+# 10.4 QueryDSL
+- 문자가 아닌 코드로 JPQL을 작성하므로 문법 오류를 컴파일 단계에서 잡을 수 있다.
+- 쉽고 간결하며 쿼리와 모양이 비슷하다.
+- 오픈소스 프로젝트이다.
+
+## QueryDsl 설정
+- `querydsl-jpa` : QueryDsl JPA 라이브러리
+- `querydsl-apt` : 쿼리 타입 생성시 필요한 라이브러리
+
+## 시작
+```java
+public void queryDSL(){
+	EntityManager em = emf.createEntityManager();
+	
+	JPAQuery query = new JPAQuery(em);
+	QMember qMember = new QMember("m");
+	List<Member> members = 
+		query.from(qMember)
+			.where(qMember.name.eq("회원1"))
+			.orderBy(qMember.name.desc())
+			.list(qMember);
+}
+```
+- 엔티티 매니저를 생성자에 넘겨준다.
+- 쿼리 타입을 생성하는데 생성자에는 별칭을 준다.
+
+### 기본 Q 생성
+- 같은 엔티티를 조인하거나 서브 쿼리에 사용하면 별칭을 사용하므로 직접 별칭을 지정해야한다.
+
+### 검색 조건 쿼리
+```java
+JPQQuery query = new JPAQuery(em);
+QItem item = QItem.item;
+List<Item> list = query.from(item)
+	.where(item.name.eq("좋은 상품").and(item.price.gt(20000)))
+	.list(item);
+```
+- `where` 절에 `and` 나 `or`을 사용할 수 있다.
+  - `between`, `contains`, `startsWith`도 사용할 수 있다.
+
+## 결과 조회
+- `uniqueResult()` : 조회 결과가 한 건일때 사용한다.
+- `singleResult ()` : 결과가 하나 이상이면 처음 데이터를 반환한다.
+- `list()` : 결과가 하나 이상일때 사용한다. 없으면 빈 컬렉션을 반환한다.
+
+## 페이징과 정렬
+- 정렬 : `orderBy`
+  - `asc()`, `desc()`
+- 페이징 : `offset`, `limit`, `restrict()`
+```java
+QItem item = QItem.item;
+
+query.from(item)
+	.where(item.price.gt(20000))
+	.orderBy(item.price.desc(), item.stockQuantity.asc())
+	.offset(10).limit(20)
+	.list(item);
+```
+
+```java
+QueryModifiers queryModifiers = new QueryModifiers(20L, 10L);
+List<Item> list = query.from(item)
+	.restrict(queryModifiers)
+	.list(item);
+```
+
+- 실제 페이징 처리를 하려면 검색된 전체 데이터 수를 알아야한다.
+  - listResults()를 사용한다.
+```java
+SearchResults<Item> result = 
+	query.from(item)
+		.where(item.price.gt(10000))
+		.offset(10).limit(20)
+		.listResults(item);
+```
+- `listResults()`를 사용하면 전체 데이터 조회를 위한 count 쿼리를 한번 더 실행한다.
+  - 그리고 SearchResults를 반환하는데, 이 객체에서 전체 데이터 수를 조회할 수 있다.
+
+## 그룹
+- groupBy를 사용하고, 그룹화된 결과를 제한하려면 having을 사용한다.
+```java
+ query.from(item)
+	 .groupBy(item.price)
+	 .having(item.price.gt(1000))
+	 .list(item);
+```
+
+## 조인
+- 첫번째 파라미터에 조인 대상을 지정하고, 두번째 파라미터에 별칭으로 사용할 쿼리 타입을 지정한다.
+```java
+query.from(order)
+	.join(order.member, member)
+	.leftJoin(order.orderItems, orderItem)
+	.list(order);
+```
+
+- join에 on을 사용할 수 있다.
+```java
+query.from(order)
+	.leftJoin(order.orderItems, orderItem)
+	.on(orderItem.count.gt(2))
+	.list(order);
+```
+
+- fetch join 을 사용할 수 있다.
+```java
+query.from(order)
+	.innerJoin(order.member, member).fetch()
+	.leftJoin(order.orderItems, orderItem).fetch()
+	.list(order);
+```
+
+- from 절에 여러 조건을 사용하는 세타 조인
+```java
+query.from(order, member)
+	.where(order.member.eq(member))
+	.list(order);
+```
+
+## 서브 쿼리
+- JPASubQuery를 생성해서 사용한다.
+- 결과가 하나면 unique(), 여러건이면 list()를 사용한다.
+```java
+query.from(item)
+	.where(item.price.eq(
+		new JPASubQuery().from(itemSub).unique(itemSub.price.max())
+	))
+	.list(item);
+```
+
+## 프로젝션과 결과 반환
+- select 절에 조회 대상을 지정하는 것
+
+### 프로젝션 대상이 하나
+- 해당 타입으로 반환한다.
+```java
+QItem item = QItem.item;
+List<String> result = query.from(item).list(item.name);
+```
+
+### 여러 컬럼 타입과 튜플
+-  프로젝션 대상으로 여러 필드 선택시 Tuple을 사용한다.
+```java
+QItem item = QItem.item;
+
+List<Tuple> result = query.from(item).list(item.name, item.price);
+
+for (Tuple tuple:result){
+	System.out.println("name = " + tuple.get(item.name));
+	System.out.println("price = " + tuple.get(item.price));
+}
+```
+
+### 빈 생성
+- 프로퍼티 접근
+- 필드 직접 접근
+- 생성자 사용
+```java
+QItem item = QItem.item;
+List<ItemDTO> result = query.from(item).list(
+	Projections.bean(ItemDTO.class, item.name.as("username"), item.price));
+)
+```
+> 쿼리 결과와 매핑할 프로퍼티 이름이 다르면 as를 사용해서 별칭을 주면 된다.
+
