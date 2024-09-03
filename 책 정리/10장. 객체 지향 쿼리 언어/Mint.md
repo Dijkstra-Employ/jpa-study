@@ -1095,3 +1095,564 @@ List<ItemDTO> result = query.from(item).list(
 ```
 > 쿼리 결과와 매핑할 프로퍼티 이름이 다르면 as를 사용해서 별칭을 주면 된다.
 
+
+### 빈 생성
+- 쿼리 결과를 엔티티가 아닌 특정 객체로 받고 싶으면 빈 생성 기능을 사용한다.
+- 객체 생성 방법
+  - 프로퍼티 접근
+  - 필드 직접 접근
+  - 생성자 사용
+
+#### 프로퍼티 접근
+```java
+QItem item = QItem.item;
+List<ItemDTO> result = query.from(item).list(
+	Projections.bean(ItemDTO.class, item.name.as("username"), item.price));
+)
+```
+> 쿼리 결과와 매핑할 프로퍼티 이름이 다르면 as를 사용해서 별칭을 주면 된다.
+
+#### 필드 직접 접근
+```java
+QItem item = QItem.item;
+List<ItemDTO> result = query.from(item).list(
+	Projections.fields(ItemDTO.class, item.name.as("username"), item.price));
+)
+```
+> 필드를 private으로 설정해도 동작한다.
+
+#### 생성자 사용
+```java
+QItem item = QItem.item;
+List<ItemDTO> result = query.from(item).list(
+	Projections.constructor(ItemDTO.class, item.name, item.price));
+)
+```
+- 지정한 프로젝션과 파라미터 순서가 같은 생성자가 필요하다
+
+### distinct
+```java
+query.distinct().from(item)
+```
+
+## 수정, 삭제 배치 쿼리
+- jpql 배치 쿼리와 같이 영속성 컨텍스트를 무시하고 db를 직접 쿼리한다.
+- 수정 배치 쿼리
+```java
+QItem item = QItem.item;
+JPQUpdateClause updateClause = new JPAUpdateClause(em, item);
+long count = updateClause.where(item.name.eq("JPA"))
+	.set(item.price, item.price.add(100))
+	.execute();
+```
+- 삭제 배치 쿼리
+```java
+QItem item = QItem.item;
+JPADeleteClause deleteClause = new JPADeleteClause(em, item);
+long count = deleteClause.where(item.name.eq("JPA"))
+	.set(item.price, item.price.add(100))
+	.execute();
+```
+
+## 동적 쿼리
+- `BooleanBuilder`를 사용하면 특정 조건에 따른 동적 쿼리를 편리하게 생성할 수 있다.
+```java
+SearchParam param = new SearchParam();
+param.setName("시골 개발자");
+param.setPrice(10000);
+
+QItem item = QItem.item;
+
+BooleanBuilder builder = new BooleanBuilder();
+if (StringUtils.hasText(param.getName())){
+	builder.and(item.name.contains(param.getName()));
+}
+if (param.getPrice() != null){
+	builder.and(item.price.gt(param.getPrice()));
+}
+List<Item> result = query.from(item)
+	.where(builder)
+	.list(item);
+```
+
+## 메서드 위임
+- 쿼리 타입에 검색 조건 직접 정의
+```java
+public class ItemExpression {
+	@QueryDelegate(Item.class)
+	public static BooleanExpression isExpensive(QItem item, Integer price){
+		return item.price.gt(price);
+	}
+}
+```
+
+- 정적 메서드를 만들고 `QueryDelegate` 어노테이션에 속성으로 이 기능을 적용할 엔티티를 지정한다.
+  - 첫번째 파라미터 : 대상 엔티티의 쿼리 타입
+  - 나머지 : 필요한 파라미터 정의
+```java
+public class QItem extends EntityPathBase<Item> {
+	public com.mysema.query.types.expr.BooleanExpression{
+		isExpensive(Integer price) {
+			return ItemExpression.isExpensive(this, price);
+		}
+	}
+}
+```
+
+- 사용하기
+```java
+QItem item = QItem.item;
+List<Item> expensiveItems = query.selectFrom(item)
+                                 .where(item.isExpensive(1000))
+                                 .fetch();
+```
+
+## QueryDsl 정리
+- 문자가 아닌 코드로 쿼리를 작성할 수 있다.
+- 복잡한 동적 쿼리를 쉽고 간단하게 작성할 수 있다.
+
+# 10.5 네이티브 SQL
+- 특정 db에 종속적인 기능을 지원하는 방법
+  - 특정 db만 사용하는 함수 : native sql 함수 호출
+  - 특정 db만 지원하는 sql 쿼리 힌트 : 몇몇 jpa 구현체 지원
+  - 인라인 뷰, `union`, `intersect` : 몇몇 jpa 구현체 지원
+  - 스토어 프로시저 : jpql에서 호출 가능
+  - 특정 db만 지원하는 문법 : native sql 사용
+
+- native sql : jpql을 사용할 수 없을 때 jpql는 sql을 직접 사용할 수 있는 기능을 제공한다.
+
+### 네이티브 sql vs jdbc api
+- `네이티브 sql` : 엔티티를 조회할 수 있고 jpa가 지원하는 `영속성 컨텍스트`의 기능을 그대로 사용할 수 있다.
+- `jdbc api` : 단순히 데이터의 나열을 조회한다.
+
+## 네이티브 sql 사용
+### 엔티티 조회
+```
+em.createNativeQuery(SQL, 결과 클래스)
+```
+- 실제 db sql을 사용한다.
+- 위치 기반 파라미터만 지원한다.
+```java
+String sql = "SELECT ID, AGE, NAME, TEAM_ID"+
+	"FROM MEMBER WHERE AGE > ?";
+
+Query nativeQuery = em.createNativeQuery(sql, Member.class)
+	.setParameter(1, 20);
+List<Member> resultList = nativeQuery.getResultList();
+```
+- 컬럼 이름과 필드 이름을 비교하여 객체를 생성한다.
+
+> 네이티브 sql로 sql을 직접 사용할 뿐이지, 나머지는 jpql을 사용할 때와 같다.
+> 조회한 엔티티도 영속성 컨텍스트에서 관리된다.
+
+### 값 조회
+```
+em.createNativeQuery(SQL)
+```
+
+```java
+String sql = "SELECT ID, AGE, NAME, TEAM_ID"+
+	"FROM MEMBER WHERE AGE > ?";
+
+Query nativeQuery = em.createNativeQuery(sql)
+		.setParameter(1, 20);
+List<Object[]> resultList = nativeQuery.getResultList();
+```
+- 여러 값으로 조회하려면 두번째 파라미터를 주지 않으면 된다.
+  - Object[]로 반환한다.
+- 스칼라 값들을 조회했을 뿐이므로 결과를 영속성 컨텍스트가 관리하지 않는다.
+
+### 결과 매핑 사용
+```
+em.createNativeQuery(SQL, resultSetMapping) 
+```
+- 엔티티와 스칼라 값을 함께 조회하는 것처럼 매핑이 복잡해지면 `@SqlResultSetMapping`을 정의해서 결과 매핑을 사용해야한다.
+```java
+// SQL 정의
+String sql = 
+    "SELECT M.ID, AGE, NAME, TEAM_ID, I.ORDER_COUNT " +
+    "FROM MEMBER M " +
+    "LEFT JOIN " +
+    "    (SELECT IM.ID, COUNT(*) AS ORDER_COUNT " +
+    "     FROM ORDERS O, MEMBER IM " +
+    "     WHERE O.MEMBER_ID = IM.ID) I " +
+    "ON M.ID = I.ID";
+
+Query nativeQuery = em.createNativeQuery(sql, "memberWithOrderCount");
+
+List<Object[]> resultList = nativeQuery.getResultList();
+for (Object[] row : resultList) {
+    Member member = (Member) row[0];
+    BigInteger orderCount = (BigInteger) row[1];
+
+    System.out.println("member = " + member);
+    System.out.println("orderCount = " + orderCount);
+}
+```
+첫 번째 요소는 Member 객체, 두 번째 요소는 주문 수(BigInteger) 이다.
+
+- 결과 매핑 정의
+```java
+@Entity
+@SqlResultSetMapping(name = "memberWithOrderCount",
+    entities = {@EntityResult(entityClass = Member.class)},
+    columns = {@ColumnResult(name = "ORDER_COUNT")}
+)
+public class Member { ... }
+```
+
+- 예시2
+```java
+Query q = em.createNativeQuery(
+    "SELECT o.id AS order_id, " +
+    "o.quantity AS order_quantity, " +
+    "o.item AS order_item, " +
+    "i.name AS item_name, " +
+    "FROM Order o, Item i " +
+    "WHERE (order_quantity > 25) AND " +
+    "(order_item = i.id)", "OrderResults");
+```
+매핑 정보
+```java
+@SqlResultSetMapping(name="OrderResults",
+    entities={
+        @EntityResult(entityClass=com.acme.Order.class, fields={
+            @FieldResult(name="id", column="order_id"),
+            @FieldResult(name="quantity", column="order_quantity"),
+            @FieldResult(name="item", column="order_item")
+        })
+    },
+    columns={
+        @ColumnResult(name="item_name")
+    }
+)
+```
+- `@FieldResult` 를 사용해서 컬럼명과 필드명을 직접 매핑한다.
+  - `@FieldResult` 를 한번이라도 사용하면 전체 필드를 `@FieldResult` 로 매핑해야한다.
+> ex) SQL 결과의 "order_id" 컬럼을 엔티티의 "id" 필드에 매핑한다.
+
+### 결과 매핑 어노테이션
+- `@SqlResultSetMapping`
+- `@EntityResult`
+- `@FieldResult`
+- `@ColumnResult`
+
+### Named 네이티브 sql
+- 네이티브 sql도 Named 네이티브 sql을 사용해서 정적 sql을 작성할 수 있다.
+```java
+@Entity
+@NamedNativeQuery(
+	name = "Member.memberSQL",
+	query = "SELECT ID, AGE, NAME, TEAM_ID" + 
+		"FROM MEMBER WHERE AGE > ? ",
+	resultClass = Member.class 
+)
+public class Member{
+
+}
+```
+- 사용 예제
+```java
+TypedQuery<Member> namedQuery = 
+	em.createNamedQuery("Member.memberSQL", Member.class)
+		.setParameter(1, 20);
+```
+
+- Named Native SQL에서 결과 매핑 사용하기
+```java
+@Entity
+@SqlResultSetMapping(name = "memberWithOrderCount",
+    entities = {@EntityResult(entityClass = Member.class)},
+    columns = {@ColumnResult(name = "ORDER_COUNT")}
+)
+@NamedNativeQuery(
+    name = "Member.memberWithOrderCount",
+    query = "SELECT M.ID, AGE, NAME, TEAM_ID, I.ORDER_COUNT " +
+            "FROM MEMBER M " +
+            "LEFT JOIN " +
+            "    (SELECT IM.ID, COUNT(*) AS ORDER_COUNT " +
+            "     FROM ORDERS O, MEMBER IM " +
+            "     WHERE O.MEMBER_ID = IM.ID) I " +
+            "ON M.ID = I.ID",
+    resultSetMapping = "memberWithOrderCount"
+)
+public class Member {...}
+```
+- 사용 예제
+```java
+List<Object[]> resultList = 
+	em.createNativeQuery("Member.memberWithOrderCount")
+		.getResultList();
+```
+
+### @NamedNativeQuery
+- `name` : 네임드 쿼리 이름
+- `query` : SQL 쿼리
+- `hints` : 힌트
+- `resultClass` : 결과 클래스
+- `resultSetMapping` : 결과 매핑 사용
+
+## 네이티브 SQL 정리
+- `네이티브 SQL`도 `JPQL`을 사용할 때와 마찬가지로 `Query`, `TypeQuery`를 반환한다.
+  - 따라서 JPQL API를 그대로 사용할 수 있다.
+  - ex) 페이징 처리 API
+```java
+String sql = "SELECT ID, AGE, NAME, TEAM_ID FROM MEMBER";
+Query nativeQuery = em.createNativeQuery(sql, Member.class)
+	.setFirstResult(10)
+	.setMaxResult(20);
+```
+
+- `네이티브 SQL`은 `JPQL`이 자동 생성하는 `SQL`을 수동으로 직접 정의한다.
+  - JPA가 제공하는 기능 대부분을 그대로 사용할 수 있다.
+- 네이티브 SQL은 관리하기 쉽지 않고, 자주 사용하면 특정 db에 종속적인 쿼리가 증가해서 이식성이 떨어진다.
+  - 될 수 있으면 표준 JPQL을 사용하고, 기능이 부족하면 JPA 구현체가 제공하는 기능을 사용하자.
+  - 마지막 방법으로 네이티브 SQL을 사용하자
+
+## 스토어드 프로시저
+### 스토어드 프로시저 사용
+```java
+DELIMITER //
+
+CREATE PROCEDURE proc_multiply (INOUT inParam INT, INOUT outParam INT)
+BEGIN
+    SET outParam = inParam * 2;
+END //
+```
+- 순서 기반 파라미터 호출
+```java
+StoredProcedureQuery spq = 
+    em.createStoredProcedureQuery("proc_multiply");
+spq.registerStoredProcedureParameter(1, Integer.class, 
+    ParameterMode.IN);
+spq.registerStoredProcedureParameter(2, Integer.class, 
+    ParameterMode.OUT);
+
+spq.setParameter(1, 100);
+spq.execute();
+
+Integer out = (Integer)spq.getOutputParameterValue(2);
+System.out.println("out = " + out); //결과 = 200
+```
+- `createStoredProcedureQuery("스토어드 프로시저 이름")`
+- `registerStoredProcedureParameter(순서, 타입, 파라미터 모드)`
+
+```java
+public enum ParameterMode {
+	IN,
+	INOUT,
+	OUT,
+	REF_CURSOR
+}
+```
+
+- 파라미터에 순서 대신 이름 사용하기
+```java
+StoredProcedureQuery spq = 
+    em.createStoredProcedureQuery("proc_multiply");
+spq.registerStoredProcedureParameter("inParam", Integer.class, // 이름 사용하기
+    ParameterMode.IN);
+spq.registerStoredProcedureParameter("outParam", Integer.class, 
+    ParameterMode.OUT);
+
+spq.setParameter("inParam", 100);
+spq.execute();
+
+Integer out = (Integer)spq.getOutputParameterValue("outParam");
+System.out.println("out = " + out); //결과 = 200
+```
+
+### Named 스토어드 프로시저 사용
+- `스토어드 프로시저 쿼리`에 이름을 부여해서 사용한다.
+```java
+@NamedStoredProcedureQuery(
+    name = "multiply",
+    procedureName = "proc_multiply",
+    parameters = {
+        @StoredProcedureParameter(name = "inParam", mode = 
+            ParameterMode.IN, type = Integer.class),
+        @StoredProcedureParameter(name = "outParam", mode = 
+            ParameterMode.OUT, type = Integer.class)
+    }
+)
+@Entity
+public class Member { ... }
+```
+
+- 실제 사용
+```java
+StoredProcedureQuery spq = 
+	em.createNamedStoredProcedureQuery("multiply");
+
+spq.setParameter("inParam", 100);
+spq.execute();
+
+Integer out = (Integer) spq.getOutputParameterValue("outParam");
+System.out.println("out = " + out);
+```
+
+# 10.6 객체 지향 쿼리 심화
+
+## 벌크 연산
+- 여러 건을 한번에 수정하거나 삭제하는 벌크 연산
+- update 벌크 연산
+```java
+String qlString = 
+    "update Product p " +
+    "set p.price = p.price * 1.1 " +
+    "where p.stockAmount < :stockAmount";
+
+int resultCount = em.createQuery(qlString)
+    .setParameter("stockAmount", 10)
+    .executeUpdate();
+```
+
+- delete 벌크 연산
+```java
+String qlString = 
+    "delete from Product p " +
+    "where p.price < :price";
+
+int resultCount = em.createQuery(qlString)
+    .setParameter("price", 100)
+    .executeUpdate();
+```
+
+### 벌크 연산 주의점
+- **벌크 연산이 영속성 컨텍스트를 무시하고 데이터베이스에 직접 쿼리한다**는 점에 주의해야한다.
+```java
+// 상품A 조회 (상품A의 가격은 1000원이다.)
+Product productA = 
+    em.createQuery("select p from Product p where p.name = :name", Product.class)
+      .setParameter("name", "productA")
+      .getSingleResult();
+
+// 출력 결과: 1000
+System.out.println("productA 수정 전 = " + productA.getPrice());
+
+// 벌크 연산 수행으로 모든 상품 가격 10% 상승
+em.createQuery("update Product p set p.price = p.price * 1.1")
+  .executeUpdate();
+
+// 출력 결과: 1000
+System.out.println("productA 수정 후 = " + productA.getPrice());
+```
+
+- `em.refresh()` 사용
+  벌크 연산을 수행한 직후에 정확한 상품 엔티티를 사용해야한다면, `em.refresh()`를 사용해서 db에서 상품을 다시 조회하면 된다.
+
+- **벌크 연산 먼저 수행** (추천)
+  가장 실용적인 해결책은 벌크 연산을 가장 먼저 수행하는 것이다.
+  벌크 연산으로 이미 변한 엔티티를 조회하게 된다.
+
+- **벌크 연산 수행 후 영속성 컨텍스트 초기화** (상황에 따라)
+  벌크 연산 수행한 후에 바로 영속성 컨텍스트를 초기화해서 남아있는 엔티티를 제거한다.
+  남아있는 엔티티가 벌크 연산이 적용되어있지 않아 영속성 컨텍스트와 db간의 데이터 차이가 발생하는 문제를 제거한다.
+
+## 영속성 컨텍스트와 JPQL
+### 쿼리 후 영속 상태인 것과 아닌 것
+- JPQL 조회 대상 : `엔티티`, `임베디드 타입`, `값 타입`
+- JPQL로 엔티티를 조회하면 영속성 컨텍스트에서 관리되지만, 엔티티가 아니면 영속성 컨텍스트에서 관리되지 않는다.
+> 조회한 엔티티만 영속성 컨텍스트가 관리한다.
+
+### JPQL로 조회한 엔티티와 영속성 컨텍스트
+- `JPQL`로 **db에서 조회한 엔티티가 영속성 컨텍스트에 이미 있으면** `jpql`로 db에서 조회한 결과를 버리고 **대신에 영속성 컨텍스트에 있던 엔티티를 반환**한다.
+  - 이때 `식별자 값`을 사용해서 비교한다.
+>  JPQL 쿼리가 실행되면, JPA는 항상 데이터베이스에 쿼리를 보낸다.
+
+#### 과정
+<img src="img/img.png" width="500">
+
+- 1. JPQL을 사용해서 조회를 요청한다.
+- 2. JPQL은 SQL로 변환되어 db를 조회한다.
+- 3. 조회한 결과와 영속성 컨텍스트를 비교한다.
+- 4. 식별자 값을 기준으로 member1은 이미 영속성 컨텍스트에 있으므로 버리고, 기존에 있던 member1이 반환 대상이 된다.
+- 5. 식별자 값을 기준으로 member2는 영속성 컨텍스트에 없으므로 영속성 컨텍스트에 추가한다.
+- 6. 쿼리 결과인 member1, member2를 반환한다. 여기서 member1은 쿼리 결과가 아닌 영속성 컨텍스트에 있던 엔티티이다.
+
+### find() vs JPQL
+- `em.find()` : 엔티티를 영속성 컨텍스트에서 먼저 찾고 없으면 데이터베이스에서 찾는다.
+  - 해당 엔티티가 영속성 컨텍스트에 있으면 메모리에서 바로 찾으므로 성능상 이점이 있다. (1차 캐시)
+  - **주소값이 같은 인스턴스를 반환한다.**
+- `jpql` : 항상 db에서 sql을 실행해서 결과를 조회한다.
+  - 이미 조회한 엔티티는 기존의 엔티티를 반환하므로 **주소값이 같은 인스턴스를 반환한다.**
+
+#### JPQL vs JPA 기본 제공 함수
+```java
+// JPA 기본 함수
+User user = entityManager.find(User.class, 1L);  // 영속성 컨텍스트 확인 후, 없으면 DB 조회
+
+// JPQL
+String jpql = "SELECT u FROM User u WHERE u.id = :id";
+User user = entityManager.createQuery(jpql, User.class)
+                         .setParameter("id", 1L)
+                         .getSingleResult();  // 항상 DB 조회 후 영속성 컨텍스트와 비교
+```
+
+### 결론
+- `JPQL`은 항상 데이터베이스를 조회한다.
+- `JPQL`로 조회한 엔티티는 영속 상태이다.
+- **영속성 컨텍스트에 이미 존재하는 엔티티가 있으면 기존 엔티티를 반환한다.**
+  - 새로운 엔티티로 대체하면 수정중인 데이터가 사라질 수 있기 때문이다.
+> 영속성 컨텍스트는 영속 상태인 엔티티의 동일성을 보장한다.
+> 영속성 컨텍스트가 같으면 동일한 엔티티를 반환한다.
+
+### JPQL과 플러시 모드
+- `flush` : **영속성 컨텍스트의 변경 내역을 데이터베이스에 동기화**하는 것
+  - flush가 일어날 때 영속성 컨텍스트에 등록, 수정, 삭제한 엔티티를 찾아서 sql을 만들어 db에 반영한다.
+- `flushMode`에 따라서 커밋하기 직전이나 쿼리 실행 직전에 자동으로 flush가 호출된다.
+```java
+em.setFlushMode(FlushMode.AUTO); // 커밋 혹은 쿼리 실행시 flush, 기본값
+em.setFlushMode(FlushMode.COMMIT); // 커밋시에만 flush
+```
+
+### 쿼리와 flushMode
+- JPQL은 영속성 컨텍스트에 있는 데이터를 고려하지 않고 데이터베이스에서 데이터를 조회한다.
+  - JPQL을 실행하기 전에 영속성 컨텍스트의 내용을 db에 반영해야한다.
+- `flushMode`를 `COMMIT`으로 실행하면 `em.flush()`를 직접 설정하거나 `Query` 객체에 `flushMode`를 설정해야한다.
+```java
+em.setFlushMode(FlushModeType.COMMIT);
+product.setPrice(2000);
+
+Product product2 = 
+	em.createQuery("select p from Product p where p.price = 2000", Product.class)
+		.setFlushMode(FlushModeType.AUTO)
+		.getSingleResult();
+```
+
+### flushMode에서 COMMIT 사용 이유
+```java
+em.setFlushMode(FlushModeType.COMMIT)
+```
+- `FlushModeType.COMMIT` : 트랜잭션을 커밋할때만 플러시하고 쿼리를 실행할 때는 플러시하지 않는다.
+  - 영속성 컨텍스트에는 있지만 db에 반영되지 않은 데이터를 조회할 수 없어 데이터 무결성에 피해를 줄 수 있다.
+
+- 플러시가 너무 자주 일어나는 상황에 모드를 사용하면 **쿼리시 발생하는 flush 횟수를 줄여서 성능을 최적화**할 수 있다.
+```
+등록()
+쿼리()
+등록()
+쿼리()
+등록()
+쿼리()
+커밋()
+```
+- `FlushModeType.AUTO` : 총 4번 flush
+- `FlushModeType.COMMIT` : 총 1번 flush
+
+- `JPA`를 사용하지 않고 `JDBC`를 직접 사용해서 `SQL`을 실행할 때도 `플러시 모드`를 고민해야한다.
+  - JPA를 통하지 않고 JDBC로 쿼리를 직접 실행하면 JPA는 JDBC가 실행할 쿼리를 인식할 방법이 없다.
+    - flushMode를 AUTO로 설정해도 플러시가 일어나지 않는다.
+  - `JDBC`로 쿼리를 실행하기 직전에 `em.flush()`를 호출해서 **영속성 컨텍스트의 내용을 db에 동기화**하는 것이 좋다.
+
+# 10.7 정리
+- `JPQL`은 `SQL`을 추상화해서 **특정 db 기술에 의존하지 않는다.**
+- `Criteria`나 `QueryDsl`은 **`JPQL`을 만들어주는 빌더 역할**이므로 JPQL을 잘 알아야한다.
+  - `Criteria`나 `QueryDsl`을 사용하면 동적으로 변하는 쿼리를 편리하게 작성할 수 있다.
+- `Criteria`는 JPA가 공식 지원하는 기능이지만 **직관적이지 않고 사용하기에 불편**하다.
+- `QueryDSL`은 JPA가 공식 지원하는 기능은 아니지만 **직관적이고 편리**하다.
+- JPA는 `네이티브 SQL`을 제공하므로 직접 SQL을 사용할 수 있다. 하지만 **특정 db에 종속적**이므로 다른 db로 변경하기 쉽지 않다.
+  - 최대한 `jpql`을 사용하고 방법이 없을 때 `네이티브 sql`을 사용하자
+- `jpql`은 대량의 데이터를 수정하거나 삭제하는 **벌크 연산을 지원**한다.
+
+
